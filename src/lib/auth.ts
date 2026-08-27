@@ -12,6 +12,7 @@ export const auth = betterAuth({
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://192.168.0.89:3000",
+    "https://el-mara-6er0m5eu8-bigtafemoney-4869s-projects.vercel.app",
   ],
 
   user: {
@@ -38,10 +39,7 @@ export const auth = betterAuth({
     autoSignInAfterVerification: true,
     expiresIn: 60 * 60,
 
-    sendVerificationEmail: async ({
-      user,
-      url,
-    }) => {
+    sendVerificationEmail: async ({ user, url }) => {
       await sendVerificationEmail({
         email: user.email,
         url,
