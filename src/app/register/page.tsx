@@ -1,0 +1,194 @@
+"use client";
+
+import { FormEvent, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { signUp } from "@/lib/auth-client";
+
+export default function RegisterPage() {
+  const router = useRouter();
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    setError(null);
+
+    const cleanName = name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPhone = phone.trim();
+
+    if (!cleanName) {
+      setError("Entre ton nom.");
+      return;
+    }
+
+    if (!cleanEmail) {
+      setError("Entre ton adresse email.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError(
+        "Le mot de passe doit contenir au moins 8 caractères."
+      );
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Les mots de passe ne correspondent pas.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const result = await signUp.email({
+        name: cleanName,
+        email: cleanEmail,
+        password,
+        phone: cleanPhone || undefined,
+        callbackURL: "/account",
+      });
+
+      if (result.error) {
+        setError(
+          result.error.message ||
+            "Impossible de créer le compte."
+        );
+        return;
+      }
+
+      router.push(
+        `/verify-email?email=${encodeURIComponent(
+          cleanEmail
+        )}&sent=1`
+      );
+    } catch (error) {
+      console.error("REGISTER_ERROR", error);
+
+      setError(
+        "Une erreur est survenue pendant la création du compte."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-[#080808] px-6 py-20 text-[#f4f0e8]">
+      <div className="mx-auto max-w-md">
+
+        <Link
+          href="/"
+          className="text-[10px] uppercase tracking-[0.35em] text-white/40 transition-colors hover:text-[#c7a96b]"
+        >
+          ← EL MARA
+        </Link>
+
+        <div className="mt-20">
+          <p className="text-[10px] uppercase tracking-[0.5em] text-[#c7a96b]">
+            EL MARA ACCOUNT
+          </p>
+
+          <h1 className="mt-5 text-5xl font-light">
+            Créer un compte
+          </h1>
+
+          <p className="mt-5 text-sm leading-7 text-white/40">
+            Crée ton compte EL MARA pour continuer tes achats.
+          </p>
+        </div>
+
+        <form
+          onSubmit={handleSubmit}
+          className="mt-10 space-y-4"
+        >
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+            autoComplete="name"
+            placeholder="Nom complet"
+            className="h-14 w-full border border-white/10 bg-transparent px-4 text-sm outline-none placeholder:text-white/20 focus:border-[#c7a96b]/60"
+          />
+
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+            autoComplete="email"
+            placeholder="Email"
+            className="h-14 w-full border border-white/10 bg-transparent px-4 text-sm outline-none placeholder:text-white/20 focus:border-[#c7a96b]/60"
+          />
+
+          <input
+            type="tel"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            autoComplete="tel"
+            placeholder="WhatsApp / Téléphone"
+            className="h-14 w-full border border-white/10 bg-transparent px-4 text-sm outline-none placeholder:text-white/20 focus:border-[#c7a96b]/60"
+          />
+
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            autoComplete="new-password"
+            placeholder="Mot de passe"
+            className="h-14 w-full border border-white/10 bg-transparent px-4 text-sm outline-none placeholder:text-white/20 focus:border-[#c7a96b]/60"
+          />
+
+          <input
+            type="password"
+            value={confirmPassword}
+            onChange={(event) =>
+              setConfirmPassword(event.target.value)
+            }
+            required
+            autoComplete="new-password"
+            placeholder="Confirmer le mot de passe"
+            className="h-14 w-full border border-white/10 bg-transparent px-4 text-sm outline-none placeholder:text-white/20 focus:border-[#c7a96b]/60"
+          />
+
+          {error && (
+            <p className="text-sm leading-6 text-red-400">
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex h-14 w-full items-center justify-center bg-[#c7a96b] text-xs uppercase tracking-[0.3em] text-black transition-all hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "Création..." : "Créer mon compte"}
+          </button>
+        </form>
+
+        <p className="mt-8 text-center text-sm text-white/30">
+          Déjà un compte ?{" "}
+          <Link
+            href="/login"
+            className="text-[#c7a96b] transition-colors hover:text-white"
+          >
+            Se connecter
+          </Link>
+        </p>
+      </div>
+    </main>
+  );
+}
