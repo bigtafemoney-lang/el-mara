@@ -125,10 +125,21 @@ const siteInfo = {
    GEOJSON
 ========================================================= */
 
-type GeoJSONGeometry = {
-  type: "Polygon" | "MultiPolygon";
-  coordinates: number[][][] | number[][][][];
-};
+type Position = [number, number];
+
+type PolygonCoordinates = Position[][];
+
+type MultiPolygonCoordinates = PolygonCoordinates[];
+
+type GeoJSONGeometry =
+  | {
+      type: "Polygon";
+      coordinates: PolygonCoordinates;
+    }
+  | {
+      type: "MultiPolygon";
+      coordinates: MultiPolygonCoordinates;
+    };
 
 type CountryFeature = {
   type: "Feature";
@@ -208,7 +219,7 @@ function latLonToVector3(
 
 function drawRingOnTexture(
   context: CanvasRenderingContext2D,
-  ring: number[][]
+  ring: Position[]
 ) {
   if (!ring.length) {
     return;
@@ -237,8 +248,12 @@ function drawRingOnTexture(
 
 function drawCountry(
   context: CanvasRenderingContext2D,
-  polygon: number[][][]
+  polygon: PolygonCoordinates
 ) {
+  if (!polygon.length) {
+    return;
+  }
+
   context.beginPath();
 
   polygon.forEach((ring) => {
@@ -284,22 +299,24 @@ function createLandTexture(
 
   countries.features.forEach(
     (feature) => {
+      const geometry =
+        feature.geometry;
+
       if (
-        feature.geometry.type ===
+        geometry.type ===
         "Polygon"
       ) {
         drawCountry(
           context,
-          feature.geometry
-            .coordinates as number[][][]
+          geometry.coordinates
         );
       }
 
       if (
-        feature.geometry.type ===
+        geometry.type ===
         "MultiPolygon"
       ) {
-        feature.geometry.coordinates.forEach(
+        geometry.coordinates.forEach(
           (polygon) => {
             drawCountry(
               context,
@@ -330,7 +347,7 @@ function createLandTexture(
 ========================================================= */
 
 function createBorderLine(
-  coordinates: number[][]
+  coordinates: Position[]
 ) {
   if (coordinates.length < 2) {
     return null;
@@ -666,26 +683,39 @@ function GlobeLoader() {
   ] = useState(false);
 
   useEffect(() => {
-    fetch(
-      "/data/countries.geojson"
-    )
-      .then((response) => {
+    let cancelled = false;
+
+    async function loadCountries() {
+      try {
+        const response =
+          await fetch(
+            "/data/countries.geojson"
+          );
+
         if (!response.ok) {
           throw new Error(
             "Carte introuvable"
           );
         }
 
-        return response.json();
-      })
-      .then(
-        (data: CountriesData) => {
+        const data =
+          (await response.json()) as CountriesData;
+
+        if (!cancelled) {
           setCountries(data);
         }
-      )
-      .catch(() => {
-        setError(true);
-      });
+      } catch {
+        if (!cancelled) {
+          setError(true);
+        }
+      }
+    }
+
+    loadCountries();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (error) {
@@ -1037,7 +1067,6 @@ function AccountMenu({
 
       {session ? (
         <div className="mt-3 flex flex-col">
-
           <Link
             href="/account"
             onClick={onClose}
@@ -1069,11 +1098,9 @@ function AccountMenu({
           >
             Déconnexion
           </button>
-
         </div>
       ) : (
         <div className="mt-3 flex flex-col">
-
           <Link
             href="/login"
             onClick={onClose}
@@ -1089,7 +1116,6 @@ function AccountMenu({
           >
             Créer un compte
           </Link>
-
         </div>
       )}
     </div>
@@ -1163,11 +1189,7 @@ function CartMenu({
       </div>
 
       <div className="max-h-[520px] overflow-y-auto">
-
-        {/* CART */}
-
         <div className="px-6 py-6">
-
           <div className="flex items-center justify-between">
             <p className="text-[9px] uppercase tracking-[0.35em] text-white/30">
               Articles
@@ -1210,7 +1232,8 @@ function CartMenu({
                         </p>
 
                         <p className="mt-1 text-[9px] uppercase tracking-[0.25em] text-white/25">
-                          Taille {item.size} · Qté {item.quantity}
+                          Taille {item.size} · Qté{" "}
+                          {item.quantity}
                         </p>
                       </div>
 
@@ -1235,10 +1258,7 @@ function CartMenu({
           )}
         </div>
 
-        {/* ORDERS IN PROGRESS */}
-
         <div className="border-t border-white/10 px-6 py-6">
-
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[9px] uppercase tracking-[0.35em] text-[#c7a96b]">
@@ -1278,8 +1298,7 @@ function CartMenu({
                         #{order.id}
                       </span>
 
-                      <span className="text-[9px] uppercase tracking-[0.2em] text-[#c7a96b]"
-                      >
+                      <span className="text-[9px] uppercase tracking-[0.2em] text-[#c7a96b]">
                         {order.status ===
                         "awaiting_payment"
                           ? "Paiement"
@@ -1304,18 +1323,18 @@ function CartMenu({
         </div>
       </div>
 
-      {/* TOTAL */}
-
       {cart.length > 0 && (
         <div className="border-t border-white/10 px-6 py-5">
-
           <div className="flex items-center justify-between">
             <span className="text-[9px] uppercase tracking-[0.3em] text-white/30">
               Total
             </span>
 
             <span className="text-lg text-[#c7a96b]">
-              {cartTotal.toLocaleString("fr-FR")} Kz
+              {cartTotal.toLocaleString(
+                "fr-FR"
+              )}{" "}
+              Kz
             </span>
           </div>
 
@@ -1326,7 +1345,6 @@ function CartMenu({
           >
             Voir le panier
           </Link>
-
         </div>
       )}
     </div>
@@ -1344,7 +1362,6 @@ function AccountModal({
 }) {
   return (
     <div className="fixed inset-0 z-[220] flex items-center justify-center p-4">
-
       <button
         type="button"
         onClick={onClose}
@@ -1353,7 +1370,6 @@ function AccountModal({
       />
 
       <div className="relative z-10 w-full max-w-md border border-white/10 bg-[#090909] p-8 shadow-2xl md:p-10">
-
         <button
           type="button"
           onClick={onClose}
@@ -1495,7 +1511,6 @@ function ProductDetail({
       />
 
       <div className="product-detail-panel relative z-10 flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden border border-white/10 bg-[#0a0a0a] shadow-2xl lg:flex-row">
-
         <button
           type="button"
           onClick={onClose}
@@ -1506,27 +1521,22 @@ function ProductDetail({
         </button>
 
         <div className="product-detail-image relative flex min-h-[360px] flex-1 items-center justify-center overflow-hidden bg-[#111] lg:min-h-[680px]">
-
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(199,169,107,0.16),transparent_48%)]" />
 
           <div className="relative flex h-[72%] w-[60%] items-center justify-center border border-white/10 bg-gradient-to-b from-white/[0.08] to-transparent shadow-2xl md:h-[78%] md:w-[55%]">
-
             <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.09),transparent_35%,rgba(199,169,107,0.09))]" />
 
             <span className="relative text-sm uppercase tracking-[0.5em] text-white/25 md:text-base">
               {product.type}
             </span>
-
           </div>
 
           <span className="absolute left-6 top-6 text-[10px] tracking-[0.4em] text-white/30">
             {product.number}
           </span>
-
         </div>
 
         <div className="flex flex-1 flex-col overflow-y-auto p-7 md:p-10 lg:max-w-[48%] lg:p-12">
-
           <p className="text-[10px] uppercase tracking-[0.45em] text-[#c7a96b]">
             {product.category}
           </p>
@@ -1542,9 +1552,7 @@ function ProductDetail({
           <div className="mt-10 h-px bg-white/10" />
 
           <div className="mt-8">
-
             <div className="flex items-center justify-between">
-
               <span className="text-[10px] uppercase tracking-[0.35em] text-white/40">
                 Size
               </span>
@@ -1552,15 +1560,15 @@ function ProductDetail({
               <span className="text-[10px] uppercase tracking-[0.25em] text-white/20">
                 Select
               </span>
-
             </div>
 
             <div className="mt-4 grid grid-cols-4 gap-2">
-
               {product.sizes.map(
                 (itemSize) => (
                   <button
-                    key={itemSize}
+                    key={
+                      itemSize
+                    }
                     type="button"
                     onClick={() =>
                       setSize(
@@ -1578,18 +1586,15 @@ function ProductDetail({
                   </button>
                 )
               )}
-
             </div>
           </div>
 
           <div className="mt-8">
-
             <span className="text-[10px] uppercase tracking-[0.35em] text-white/40">
               Quantity
             </span>
 
             <div className="mt-4 flex h-12 w-fit items-center border border-white/10">
-
               <button
                 type="button"
                 onClick={() =>
@@ -1622,12 +1627,10 @@ function ProductDetail({
               >
                 +
               </button>
-
             </div>
           </div>
 
           <div className="mt-10">
-
             <p className="text-[10px] uppercase tracking-[0.35em] text-white/40">
               Description
             </p>
@@ -1635,7 +1638,6 @@ function ProductDetail({
             <p className="mt-4 text-sm leading-7 text-white/45">
               {product.description}
             </p>
-
           </div>
 
           <button
@@ -1655,7 +1657,6 @@ function ProductDetail({
           <p className="mt-4 text-center text-[9px] uppercase tracking-[0.3em] text-white/20">
             Size {size} · Quantity {quantity}
           </p>
-
         </div>
       </div>
     </div>
@@ -2118,7 +2119,6 @@ export default function CollectionPage() {
 
   return (
     <main className="min-h-screen bg-[#080808] text-[#f4f0e8]">
-
       {/* =====================================================
           INTRO
       ====================================================== */}
@@ -2128,9 +2128,7 @@ export default function CollectionPage() {
         className="fixed inset-0 z-50 flex items-center justify-center bg-[#080808]"
       >
         <div className="flex flex-col items-center">
-
           <div className="flex overflow-hidden text-[clamp(3rem,10vw,9rem)] font-light tracking-[0.35em]">
-
             {"EL MARA"
               .split("")
               .map(
@@ -2151,11 +2149,9 @@ export default function CollectionPage() {
                   </span>
                 )
               )}
-
           </div>
 
           <div className="intro-line mt-8 h-px w-40 origin-left scale-x-0 bg-[#c7a96b]" />
-
         </div>
       </section>
 
@@ -2164,9 +2160,6 @@ export default function CollectionPage() {
       ====================================================== */}
 
       <header className="fixed left-0 right-0 top-0 z-40 flex items-center justify-between px-6 py-6 mix-blend-difference md:px-12">
-
-        {/* HOME */}
-
         <Link
           href="/"
           className="group flex items-center gap-3 text-[10px] uppercase tracking-[0.35em] text-white/70 transition-colors duration-500 hover:text-[#c7a96b]"
@@ -2180,18 +2173,11 @@ export default function CollectionPage() {
           </span>
         </Link>
 
-        {/* BRAND */}
-
         <div className="text-xs font-light tracking-[0.45em] text-white">
           EL MARA
         </div>
 
-        {/* RIGHT ACTIONS */}
-
         <div className="relative flex items-center gap-3">
-
-          {/* ACCOUNT */}
-
           <button
             type="button"
             onClick={() => {
@@ -2225,8 +2211,6 @@ export default function CollectionPage() {
               <path d="M4.5 20c.8-3.2 3.2-5 7.5-5s6.7 1.8 7.5 5" />
             </svg>
           </button>
-
-          {/* CART */}
 
           <button
             type="button"
@@ -2273,8 +2257,6 @@ export default function CollectionPage() {
             )}
           </button>
 
-          {/* ACCOUNT MENU */}
-
           <AccountMenu
             isOpen={
               accountMenuOpen
@@ -2303,8 +2285,6 @@ export default function CollectionPage() {
             }
           />
 
-          {/* CART MENU */}
-
           <CartMenu
             isOpen={
               cartMenuOpen
@@ -2331,9 +2311,7 @@ export default function CollectionPage() {
               });
             }}
           />
-
         </div>
-
       </header>
 
       {/* =====================================================
@@ -2347,11 +2325,7 @@ export default function CollectionPage() {
         className="collection-content px-6 pb-24 pt-32 md:px-12 md:pt-40"
       >
         <div className="mx-auto max-w-[1600px]">
-
-          {/* TITLE + GLOBE */}
-
           <div className="mb-24 grid items-center gap-12 lg:grid-cols-2">
-
             <div>
               <p className="mb-5 text-xs uppercase tracking-[0.5em] text-[#c7a96b]">
                 EL MARA / 01
@@ -2371,25 +2345,16 @@ export default function CollectionPage() {
             </div>
 
             <div className="h-[420px] w-full md:h-[520px]">
-
               <div className="relative h-full w-full overflow-hidden">
-
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(199,169,107,0.12),transparent_55%)]" />
 
                 <GlobeLoader />
-
               </div>
-
             </div>
-
           </div>
 
-          {/* PRODUCTS */}
-
           <div className="mb-16 flex items-end justify-between border-b border-white/10 pb-8">
-
             <div>
-
               <p className="mb-4 text-xs uppercase tracking-[0.4em] text-[#c7a96b]">
                 02
               </p>
@@ -2397,17 +2362,14 @@ export default function CollectionPage() {
               <h2 className="text-4xl font-light md:text-6xl">
                 All Products
               </h2>
-
             </div>
 
             <span className="hidden text-xs uppercase tracking-[0.3em] text-white/30 md:block">
               09 Pieces
             </span>
-
           </div>
 
           <div className="grid gap-x-6 gap-y-16 md:grid-cols-2 lg:grid-cols-3">
-
             {products.map(
               (
                 product,
@@ -2429,15 +2391,11 @@ export default function CollectionPage() {
                 />
               )
             )}
-
           </div>
 
-          {/* LOGO */}
-
           <div className="mt-40 flex flex-col items-center border-t border-white/10 pt-24">
-
             <img
-              src="/logo.png"
+              src="/Logo1.png"
               alt="EL MARA"
               className="h-32 w-auto object-contain md:h-40"
             />
@@ -2445,13 +2403,9 @@ export default function CollectionPage() {
             <p className="mt-6 text-[9px] uppercase tracking-[0.55em] text-white/30">
               EL MARA
             </p>
-
           </div>
 
-          {/* BACK HOME */}
-
           <div className="mt-20 flex justify-center">
-
             <Link
               href="/"
               className="group border border-[#c7a96b]/50 px-8 py-4 text-[10px] uppercase tracking-[0.35em] transition-all duration-500 hover:bg-[#c7a96b] hover:text-black"
@@ -2462,15 +2416,10 @@ export default function CollectionPage() {
 
               Retour à l'accueil
             </Link>
-
           </div>
 
-          {/* FOOTER */}
-
           <footer className="mt-32 border-t border-white/10 pt-20">
-
             <div className="grid gap-16 md:grid-cols-3">
-
               <div>
                 <p className="text-xs uppercase tracking-[0.45em] text-[#c7a96b]">
                   EL MARA
@@ -2488,7 +2437,6 @@ export default function CollectionPage() {
                 </p>
 
                 <div className="mt-6 flex flex-col gap-4 text-sm text-white/45">
-
                   {siteInfo.email && (
                     <a
                       href={`mailto:${siteInfo.email}`}
@@ -2515,7 +2463,6 @@ export default function CollectionPage() {
                         Contact information coming soon.
                       </span>
                     )}
-
                 </div>
               </div>
 
@@ -2525,10 +2472,11 @@ export default function CollectionPage() {
                 </p>
 
                 <div className="mt-6 flex flex-col gap-4 text-sm text-white/45">
-
                   {siteInfo.instagram && (
                     <a
-                      href={siteInfo.instagram}
+                      href={
+                        siteInfo.instagram
+                      }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="transition-colors duration-300 hover:text-[#c7a96b]"
@@ -2539,7 +2487,9 @@ export default function CollectionPage() {
 
                   {siteInfo.tiktok && (
                     <a
-                      href={siteInfo.tiktok}
+                      href={
+                        siteInfo.tiktok
+                      }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="transition-colors duration-300 hover:text-[#c7a96b]"
@@ -2554,14 +2504,11 @@ export default function CollectionPage() {
                         Social networks coming soon.
                       </span>
                     )}
-
                 </div>
               </div>
-
             </div>
 
             <div className="mt-20 flex flex-col justify-between gap-6 border-t border-white/10 pt-8 text-[9px] uppercase tracking-[0.35em] text-white/20 md:flex-row">
-
               <p>
                 © 2026 EL MARA
               </p>
@@ -2569,17 +2516,10 @@ export default function CollectionPage() {
               <p>
                 All Rights Reserved
               </p>
-
             </div>
-
           </footer>
-
         </div>
       </section>
-
-      {/* =====================================================
-          PRODUCT DETAIL
-      ====================================================== */}
 
       {selectedProduct && (
         <ProductDetail
@@ -2597,10 +2537,6 @@ export default function CollectionPage() {
         />
       )}
 
-      {/* =====================================================
-          ACCOUNT MODAL
-      ====================================================== */}
-
       {showAccountModal && (
         <AccountModal
           onClose={() =>
@@ -2610,7 +2546,6 @@ export default function CollectionPage() {
           }
         />
       )}
-
     </main>
   );
 }

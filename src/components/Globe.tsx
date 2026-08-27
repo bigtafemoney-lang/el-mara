@@ -5,10 +5,21 @@ import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Stars } from "@react-three/drei";
 import * as THREE from "three";
 
-type GeoJSONGeometry = {
-  type: "Polygon" | "MultiPolygon";
-  coordinates: number[][][] | number[][][][];
-};
+type Position = [number, number];
+
+type PolygonCoordinates = Position[][];
+
+type MultiPolygonCoordinates = PolygonCoordinates[];
+
+type GeoJSONGeometry =
+  | {
+      type: "Polygon";
+      coordinates: PolygonCoordinates;
+    }
+  | {
+      type: "MultiPolygon";
+      coordinates: MultiPolygonCoordinates;
+    };
 
 type CountryFeature = {
   type: "Feature";
@@ -29,7 +40,7 @@ const MAP_WIDTH = 2048;
 const MAP_HEIGHT = 1024;
 
 /* =========================================================
-   COORDONNÉES -> GLOBE
+   COORDONNÉES → GLOBE
 ========================================================= */
 
 function latLonToVector3(
@@ -37,119 +48,169 @@ function latLonToVector3(
   longitude: number,
   radius = RADIUS
 ) {
-  const phi = (90 - latitude) * (Math.PI / 180);
-  const theta = (longitude + 180) * (Math.PI / 180);
+  const phi =
+    (90 - latitude) *
+    (Math.PI / 180);
+
+  const theta =
+    (longitude + 180) *
+    (Math.PI / 180);
 
   return new THREE.Vector3(
-    -radius * Math.sin(phi) * Math.cos(theta),
+    -radius *
+      Math.sin(phi) *
+      Math.cos(theta),
     radius * Math.cos(phi),
-    radius * Math.sin(phi) * Math.sin(theta)
+    radius *
+      Math.sin(phi) *
+      Math.sin(theta)
   );
 }
 
 /* =========================================================
-   GEOJSON -> CANVAS TEXTURE
-   Cette texture contient les continents ET frontières.
+   GEOJSON → CANVAS
 ========================================================= */
 
 function drawRing(
   ctx: CanvasRenderingContext2D,
-  ring: number[][],
+  ring: Position[],
   width: number,
   height: number
 ) {
-  if (!ring.length) return;
+  if (ring.length === 0) {
+    return;
+  }
 
-  ring.forEach(([longitude, latitude], index) => {
-    const x = ((longitude + 180) / 360) * width;
-    const y = ((90 - latitude) / 180) * height;
+  ring.forEach(
+    ([longitude, latitude], index) => {
+      const x =
+        ((longitude + 180) / 360) *
+        width;
 
-    if (index === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
+      const y =
+        ((90 - latitude) / 180) *
+        height;
+
+      if (index === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
     }
-  });
+  );
 
   ctx.closePath();
 }
 
 function drawPolygon(
   ctx: CanvasRenderingContext2D,
-  polygon: number[][][],
+  polygon: PolygonCoordinates,
   width: number,
   height: number
 ) {
+  if (polygon.length === 0) {
+    return;
+  }
+
   ctx.beginPath();
 
   polygon.forEach((ring) => {
-    drawRing(ctx, ring, width, height);
+    drawRing(
+      ctx,
+      ring,
+      width,
+      height
+    );
   });
 
   /*
-   * Remplissage doré très subtil
-   * pour rendre les continents visibles
-   * sans perdre l'effet noir/luxe.
+   * Continents.
    */
-  ctx.fillStyle = "rgba(199, 169, 107, 0.38)";
+  ctx.fillStyle =
+    "rgba(199, 169, 107, 0.38)";
+
   ctx.fill("evenodd");
 
   /*
-   * Frontières dorées.
+   * Frontières.
    */
-  ctx.strokeStyle = "rgba(199, 169, 107, 0.95)";
+  ctx.strokeStyle =
+    "rgba(199, 169, 107, 0.95)";
+
   ctx.lineWidth = 2;
+
   ctx.stroke();
 }
 
 function createWorldTexture(
   countries: CountriesData
 ) {
-  const canvas = document.createElement("canvas");
+  const canvas =
+    document.createElement("canvas");
 
   canvas.width = MAP_WIDTH;
   canvas.height = MAP_HEIGHT;
 
-  const ctx = canvas.getContext("2d");
+  const context =
+    canvas.getContext("2d");
 
-  if (!ctx) {
+  if (!context) {
     return null;
   }
 
-  /*
-   * Fond transparent.
-   */
-  ctx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+  context.clearRect(
+    0,
+    0,
+    MAP_WIDTH,
+    MAP_HEIGHT
+  );
 
-  countries.features.forEach((feature) => {
-    const geometry = feature.geometry;
+  countries.features.forEach(
+    (feature) => {
+      const geometry =
+        feature.geometry;
 
-    if (geometry.type === "Polygon") {
-      drawPolygon(
-        ctx,
-        geometry.coordinates as number[][][],
-        MAP_WIDTH,
-        MAP_HEIGHT
-      );
-    }
-
-    if (geometry.type === "MultiPolygon") {
-      geometry.coordinates.forEach((polygon) => {
+      if (geometry.type === "Polygon") {
         drawPolygon(
-          ctx,
-          polygon,
+          context,
+          geometry.coordinates,
           MAP_WIDTH,
           MAP_HEIGHT
         );
-      });
+      }
+
+      if (
+        geometry.type ===
+        "MultiPolygon"
+      ) {
+        geometry.coordinates.forEach(
+          (polygon) => {
+            drawPolygon(
+              context,
+              polygon,
+              MAP_WIDTH,
+              MAP_HEIGHT
+            );
+          }
+        );
+      }
     }
-  });
+  );
 
-  const texture = new THREE.CanvasTexture(canvas);
+  const texture =
+    new THREE.CanvasTexture(
+      canvas
+    );
 
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.colorSpace =
+    THREE.SRGBColorSpace;
+
+  texture.wrapS =
+    THREE.RepeatWrapping;
+
+  texture.wrapT =
+    THREE.ClampToEdgeWrapping;
+
   texture.needsUpdate = true;
 
   return texture;
@@ -160,28 +221,39 @@ function createWorldTexture(
 ========================================================= */
 
 function AngolaMarker() {
-  /*
-   * Position de Luanda.
-   * Le point reste fixé à la surface du globe.
-   */
-  const position = latLonToVector3(
-    -8.8383,
-    13.2344,
-    RADIUS + 0.055
-  );
+  const position =
+    latLonToVector3(
+      -8.8383,
+      13.2344,
+      RADIUS + 0.055
+    );
 
   return (
     <group position={position}>
       {/* POINT ROUGE */}
       <mesh>
-        <sphereGeometry args={[0.08, 32, 32]} />
+        <sphereGeometry
+          args={[
+            0.08,
+            32,
+            32,
+          ]}
+        />
 
-        <meshBasicMaterial color="#ff2020" />
+        <meshBasicMaterial
+          color="#ff2020"
+        />
       </mesh>
 
       {/* HALO ROUGE */}
       <mesh>
-        <sphereGeometry args={[0.17, 32, 32]} />
+        <sphereGeometry
+          args={[
+            0.17,
+            32,
+            32,
+          ]}
+        />
 
         <meshBasicMaterial
           color="#ff2020"
@@ -197,22 +269,31 @@ function AngolaMarker() {
    GLOBE
 ========================================================= */
 
-function Globe({
+function GlobeModel({
   texture,
 }: {
   texture: THREE.CanvasTexture;
 }) {
+  const globeScale =
+    RADIUS / 2.4 + 0.008;
+
   return (
     <group
-      /*
-       * Orientation initiale :
-       * on place l'Afrique dans la zone visible.
-       */
-      rotation={[0, -0.62, 0]}
+      rotation={[
+        0,
+        -0.62,
+        0,
+      ]}
     >
       {/* SPHÈRE NOIRE */}
       <mesh>
-        <sphereGeometry args={[RADIUS, 96, 96]} />
+        <sphereGeometry
+          args={[
+            RADIUS,
+            96,
+            96,
+          ]}
+        />
 
         <meshStandardMaterial
           color="#020202"
@@ -224,12 +305,18 @@ function Globe({
       {/* CONTINENTS + FRONTIÈRES */}
       <mesh
         scale={[
-          RADIUS / 2.4 + 0.008,
-          RADIUS / 2.4 + 0.008,
-          RADIUS / 2.4 + 0.008,
+          globeScale,
+          globeScale,
+          globeScale,
         ]}
       >
-        <sphereGeometry args={[2.4, 96, 96]} />
+        <sphereGeometry
+          args={[
+            2.4,
+            96,
+            96,
+          ]}
+        />
 
         <meshBasicMaterial
           map={texture}
@@ -254,9 +341,14 @@ function GlobeScene({
 }: {
   countries: CountriesData;
 }) {
-  const texture = useMemo(() => {
-    return createWorldTexture(countries);
-  }, [countries]);
+  const texture =
+    useMemo(
+      () =>
+        createWorldTexture(
+          countries
+        ),
+      [countries]
+    );
 
   useEffect(() => {
     return () => {
@@ -271,18 +363,28 @@ function GlobeScene({
   return (
     <>
       {/* LUMIÈRE GÉNÉRALE */}
-      <ambientLight intensity={0.28} />
+      <ambientLight
+        intensity={0.28}
+      />
 
       {/* LUMIÈRE DORÉE PRINCIPALE */}
       <directionalLight
-        position={[5, 4, 6]}
+        position={[
+          5,
+          4,
+          6,
+        ]}
         intensity={2.8}
         color="#c7a96b"
       />
 
       {/* LUMIÈRE D'APPOINT */}
       <pointLight
-        position={[-4, -2, 4]}
+        position={[
+          -4,
+          -2,
+          4,
+        ]}
         intensity={1.3}
         color="#c7a96b"
       />
@@ -299,7 +401,9 @@ function GlobeScene({
       />
 
       {/* GLOBE */}
-      <Globe texture={texture} />
+      <GlobeModel
+        texture={texture}
+      />
 
       {/* CONTRÔLES */}
       <OrbitControls
@@ -322,28 +426,53 @@ function GlobeScene({
 ========================================================= */
 
 export default function Globe() {
-  const [countries, setCountries] =
-    useState<CountriesData | null>(null);
+  const [
+    countries,
+    setCountries,
+  ] =
+    useState<CountriesData | null>(
+      null
+    );
 
-  const [error, setError] = useState(false);
+  const [
+    error,
+    setError,
+  ] = useState(false);
 
   useEffect(() => {
-    fetch("/data/countries.geojson")
-      .then((response) => {
+    let cancelled = false;
+
+    async function loadCountries() {
+      try {
+        const response =
+          await fetch(
+            "/data/countries.geojson"
+          );
+
         if (!response.ok) {
           throw new Error(
             "Impossible de charger la carte."
           );
         }
 
-        return response.json();
-      })
-      .then((data: CountriesData) => {
-        setCountries(data);
-      })
-      .catch(() => {
-        setError(true);
-      });
+        const data =
+          (await response.json()) as CountriesData;
+
+        if (!cancelled) {
+          setCountries(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setError(true);
+        }
+      }
+    }
+
+    loadCountries();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -358,26 +487,32 @@ export default function Globe() {
       )}
 
       {/* CHARGEMENT */}
-      {!countries && !error && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-          <p className="text-[10px] uppercase tracking-[0.4em] text-[#c7a96b]/60">
-            Loading EL MARA Globe
-          </p>
-        </div>
-      )}
+      {!countries &&
+        !error && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <p className="text-[10px] uppercase tracking-[0.4em] text-[#c7a96b]/60">
+              Loading EL MARA Globe
+            </p>
+          </div>
+        )}
 
       <Canvas
         dpr={[1, 2]}
         camera={{
-          /*
-           * Vue initiale orientée vers l'Afrique.
-           */
-          position: [3.2, 0.8, 5.4],
+          position: [
+            3.2,
+            0.8,
+            5.4,
+          ],
           fov: 45,
         }}
       >
         {countries && (
-          <GlobeScene countries={countries} />
+          <GlobeScene
+            countries={
+              countries
+            }
+          />
         )}
       </Canvas>
     </div>

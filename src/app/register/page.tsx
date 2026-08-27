@@ -57,7 +57,6 @@ export default function RegisterPage() {
         name: cleanName,
         email: cleanEmail,
         password,
-        phone: cleanPhone || undefined,
         callbackURL: "/account",
       });
 
@@ -68,6 +67,10 @@ export default function RegisterPage() {
         );
         return;
       }
+
+      // Le champ téléphone reste dans le formulaire.
+      // Il pourra être enregistré séparément après la création du compte.
+      void cleanPhone;
 
       router.push(
         `/verify-email?email=${encodeURIComponent(
